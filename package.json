@@ -20,12 +20,13 @@
 	"license": "MIT",
 	"overrides": {
 		"qs": "^6.14.0",
+		"body-parser": "^1.20.6",
 		"express": {
 			"path-to-regexp": "^1.9.0"
 		}
 	},
 	"dependencies": {
-		"dotenv": "^8.2.0",
+		"dotenv": "^16.4.7",
 		"express": "^4.21.2",
 		"openid-client": "^5.6.5",
 		"readline-sync": "^1.4.10"
