@@ -1,0 +1,127 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: CI
+
+on:
+  push:
+
+env:
+  IMAGE_NAME: ropc-sample
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # SMOKE: install dependencies, build Docker image, verify container starts
+  # ---------------------------------------------------------------------------
+  smoke:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Docker image
+        run: docker build -t ${{ env.IMAGE_NAME }}:smoke .
+
+      # The ROPC app blocks on stdin — start it with a named container so we
+      # can attach logs and clean up unconditionally. Feed blank stdin after
+      # a bounded poll confirms the Username: prompt appears (or timeout).
+      - name: Verify container starts and reaches username prompt
+        run: |
+          # Start detached with stdin open so readline-sync doesn't crash
+          docker run -d --name ropc-smoke -i \
+            -e TENANT_URL="https://smoke-check.example.invalid" \
+            -e CLIENT_ID="smoke" \
+            -e CLIENT_SECRET="smoke" \
+            -e SCOPE="openid" \
+            ${{ env.IMAGE_NAME }}:smoke
+
+          # Bounded poll: up to 20 attempts × 1 s = 20 s max
+          FOUND=0
+          for i in $(seq 1 20); do
+            LOGS=$(docker logs ropc-smoke 2>&1 || true)
+            if echo "$LOGS" | grep -qi "Username:"; then
+              echo "✓ Container reached Username prompt (attempt $i)"
+              FOUND=1
+              break
+            fi
+            # If container already exited unexpectedly, fail early
+            STATUS=$(docker inspect -f '{{.State.Status}}' ropc-smoke 2>/dev/null || echo "gone")
+            if [ "$STATUS" = "exited" ] && [ "$FOUND" = "0" ]; then
+              echo "✗ Container exited before reaching Username prompt" >&2
+              docker logs ropc-smoke 2>&1 || true
+              exit 1
+            fi
+            sleep 1
+          done
+
+          if [ "$FOUND" = "0" ]; then
+            echo "✗ Username prompt not seen after 20 s" >&2
+            docker logs ropc-smoke 2>&1 || true
+            exit 1
+          fi
+
+      - name: Dump smoke container logs on failure
+        if: failure()
+        run: docker logs ropc-smoke 2>&1 || true
+
+      - name: Cleanup smoke container
+        if: always()
+        run: docker rm -f ropc-smoke || true
+
+  # ---------------------------------------------------------------------------
+  # E2E: run the full ROPC flow against IBM Verify using real credentials
+  # ---------------------------------------------------------------------------
+  e2e:
+    name: E2E Test — ROPC Flow
+    runs-on: ubuntu-latest
+    needs: smoke
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install all dependencies (including devDependencies)
+        run: npm ci
+
+      - name: Build Docker image
+        run: docker build -t ${{ env.IMAGE_NAME }}:e2e .
+
+      # Run the Node/TypeScript E2E test that spawns the Docker container,
+      # feeds credentials via stdin, and asserts expected output.
+      - name: Run ROPC E2E test
+        env:
+          DOCKER_IMAGE: ${{ env.IMAGE_NAME }}:e2e
+          TENANT_URL: ${{ secrets.TENANT_URL }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          SCOPE: ${{ secrets.SCOPE }}
+          TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+        run: npm test
+
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-logs
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
