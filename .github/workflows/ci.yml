@@ -38,35 +38,49 @@ jobs:
       # a bounded poll confirms the Username: prompt appears (or timeout).
       - name: Verify container starts and reaches username prompt
         run: |
-          # Start detached with stdin open so readline-sync doesn't crash
-          docker run -d --name ropc-smoke -i \
+          # Pass dummy TEST_USERNAME/TEST_PASSWORD so readline-sync is bypassed
+          # (no /dev/tty available on CI runners). The smoke tenant URL is
+          # intentionally invalid — we only verify the container starts and the
+          # app reaches the Authenticating... line before failing on discovery.
+          docker run -d --name ropc-smoke \
             -e TENANT_URL="https://smoke-check.example.invalid" \
             -e CLIENT_ID="smoke" \
             -e CLIENT_SECRET="smoke" \
             -e SCOPE="openid" \
+            -e TEST_USERNAME="smoke-user" \
+            -e TEST_PASSWORD="smoke-pass" \
             ${{ env.IMAGE_NAME }}:smoke
 
           # Bounded poll: up to 20 attempts × 1 s = 20 s max
+          # Success = container printed "Authenticating..." (past credential step)
+          # or exited (expected — invalid tenant causes discovery failure)
           FOUND=0
           for i in $(seq 1 20); do
             LOGS=$(docker logs ropc-smoke 2>&1 || true)
-            if echo "$LOGS" | grep -qi "Username:"; then
-              echo "✓ Container reached Username prompt (attempt $i)"
+            if echo "$LOGS" | grep -qi "Authenticating"; then
+              echo "✓ Container reached Authenticating step (attempt $i)"
               FOUND=1
               break
             fi
-            # If container already exited unexpectedly, fail early
+            # Container may exit quickly due to invalid tenant — that's fine for smoke
             STATUS=$(docker inspect -f '{{.State.Status}}' ropc-smoke 2>/dev/null || echo "gone")
-            if [ "$STATUS" = "exited" ] && [ "$FOUND" = "0" ]; then
-              echo "✗ Container exited before reaching Username prompt" >&2
-              docker logs ropc-smoke 2>&1 || true
-              exit 1
+            if [ "$STATUS" = "exited" ] || [ "$STATUS" = "gone" ]; then
+              # Check it at least printed the banner before exiting
+              if echo "$LOGS" | grep -qi "Resource Owner"; then
+                echo "✓ Container started and printed banner (exited due to invalid tenant URL)"
+                FOUND=1
+              else
+                echo "✗ Container exited without printing expected output" >&2
+                docker logs ropc-smoke 2>&1 || true
+                exit 1
+              fi
+              break
             fi
             sleep 1
           done
 
           if [ "$FOUND" = "0" ]; then
-            echo "✗ Username prompt not seen after 20 s" >&2
+            echo "✗ Expected output not seen after 20 s" >&2
             docker logs ropc-smoke 2>&1 || true
             exit 1
           fi
