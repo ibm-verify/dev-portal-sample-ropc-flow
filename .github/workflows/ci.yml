@@ -16,6 +16,9 @@ jobs:
     name: Smoke Test
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      SMOKE_USERNAME: smoke-user
+      SMOKE_PASSWORD: smoke-pass
 
     steps:
       - name: Checkout
@@ -47,8 +50,8 @@ jobs:
             -e CLIENT_ID="smoke" \
             -e CLIENT_SECRET="smoke" \
             -e SCOPE="openid" \
-            -e TEST_USERNAME="smoke-user" \
-            -e TEST_PASSWORD="smoke-pass" \
+            -e TEST_USERNAME="${{ env.SMOKE_USERNAME }}" \
+            -e TEST_PASSWORD="${{ env.SMOKE_PASSWORD }}" \
             ${{ env.IMAGE_NAME }}:smoke
 
           # Bounded poll: up to 20 attempts × 1 s = 20 s max
