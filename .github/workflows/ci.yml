@@ -34,23 +34,29 @@ jobs:
         run: docker build -t ${{ env.IMAGE_NAME }}:smoke .
 
       # Verify the container starts and the app reaches the Authenticating step.
-      # Real secrets are used so readline-sync is bypassed via TEST_USERNAME/TEST_PASSWORD.
-      # An intentionally invalid TENANT_URL ensures no real auth request is made.
+      # Only TEST_USERNAME and TEST_PASSWORD are needed to bypass readline-sync.
+      # CLIENT_ID and CLIENT_SECRET are intentionally omitted — the token request
+      # never executes because the .invalid TLD (IANA-reserved, RFC 2606) cannot
+      # resolve in DNS. Placeholder values are used so real credentials are never
+      # present in the smoke job at all.
       - name: Verify container starts
         env:
-          CLIENT_ID: ${{ secrets.CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
-          SCOPE: ${{ secrets.SCOPE }}
-          TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
-          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+          TENANT_URL: https://smoke-check.example.invalid
+          CLIENT_ID: smoke-client-id
+          CLIENT_SECRET: smoke-client-secret
+          SCOPE: openid
+          TEST_USERNAME: smoke-user
+          TEST_PASSWORD: smoke-pass
         run: |
+          # Bare -e KEY inherits values from the step env block above,
+          # keeping placeholder values out of the process args list.
           docker run -d --name ropc-smoke \
-            -e TENANT_URL="https://smoke-check.example.invalid" \
-            -e CLIENT_ID="${CLIENT_ID}" \
-            -e CLIENT_SECRET="${CLIENT_SECRET}" \
-            -e SCOPE="${SCOPE}" \
-            -e TEST_USERNAME="${TEST_USERNAME}" \
-            -e TEST_PASSWORD="${TEST_PASSWORD}" \
+            -e TENANT_URL \
+            -e CLIENT_ID \
+            -e CLIENT_SECRET \
+            -e SCOPE \
+            -e TEST_USERNAME \
+            -e TEST_PASSWORD \
             ${{ env.IMAGE_NAME }}:smoke
 
           # Bounded poll: up to 20 attempts x 1 s = 20 s max

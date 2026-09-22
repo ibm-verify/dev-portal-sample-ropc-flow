@@ -25,6 +25,19 @@ Every push to any branch automatically runs two sequential checks:
 
 If the smoke test fails, the E2E job is skipped. If either job fails, the workflow is marked as failed on the branch.
 
+### GitHub Actions secrets
+
+Add the following secrets to **Settings → Secrets and variables → Actions**:
+
+| Secret | Description |
+|---|---|
+| `TENANT_URL` | `https://<your-tenant>.verify.ibm.com` |
+| `CLIENT_ID` | ROPC application Client ID |
+| `CLIENT_SECRET` | ROPC application Client Secret |
+| `SCOPE` | e.g. `openid` |
+| `TEST_USERNAME` | IBM Verify test user username |
+| `TEST_PASSWORD` | IBM Verify test user password |
+
 ### Running E2E tests locally
 
 1. Add the following to your `.env` file (in addition to the existing variables):

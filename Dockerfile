@@ -1,11 +1,14 @@
-# NOTE: For production/CI use registry.redhat.io/ubi9/nodejs-22-minimal:latest
-# (requires `docker login registry.redhat.io` with a Red Hat account).
-# node:22-slim (Debian) is used here for local/CI runner compatibility.
-# Alpine is NOT suitable: readline-sync's read.sh requires perl and a full
-# stty implementation, neither of which are available in busybox/Alpine.
+# registry.access.redhat.com is the publicly accessible Red Hat UBI mirror —
+# no authentication required, fully Red Hat-sourced, IBM policy compliant.
+# registry.redhat.io requires a subscription login (not available on CI runners).
+#
+# :1 pins to the v1 major stream — floats within it for security patches
+# without risking a silent breaking change if Red Hat releases a :2 stream.
 
 # ── Stage 1: install dependencies ────────────────────────────────────────────
-FROM node:22-slim AS deps
+FROM registry.access.redhat.com/ubi9/nodejs-22-minimal:1 AS deps
+
+USER root
 
 WORKDIR /app
 
@@ -13,7 +16,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
-FROM node:22-slim AS runner
+FROM registry.access.redhat.com/ubi9/nodejs-22-minimal:1 AS runner
 
 WORKDIR /app
 
@@ -23,10 +26,9 @@ COPY --from=deps /app/node_modules ./node_modules
 # Copy application source
 COPY server.js ./
 
-# Run as non-root (node user is built into the official node image)
-USER node
+# Run as non-root (UID 1001 is the default non-root user in UBI images)
+USER 1001
 
 # ROPC sample is a CLI app: it reads stdin and exits.
-# Start with -i so stdin can be piped in by the test runner.
 # No port is exposed.
 CMD ["node", "server.js"]
