@@ -143,7 +143,11 @@ async function runROPCFlowTest(
       clearTimeout(timer);
       cleanup();
 
-      // Always log sanitised output for debugging
+      // Always log sanitised output for debugging.
+      // NOTE: AppScan flags these lines as ErrorHandling.RevealDetails.StackTrace
+      // (false positive) — TEST_PASSWORD is the redaction key passed to sanitise(),
+      // not a value being logged. The console.log argument is the sanitised return
+      // value with the password already replaced by [REDACTED].
       console.log("\n--- stdout (sanitised) ---");
       console.log(sanitise(stdout, TEST_PASSWORD));
       if (stderr.trim()) {

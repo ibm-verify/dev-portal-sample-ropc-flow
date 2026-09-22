@@ -60,6 +60,12 @@ DOCKER_IMAGE=ropc-sample:e2e npm test
 
 > **Note:** Unlike browser-based flows, ROPC does not require Playwright. The test spawns the Docker container directly, injects credentials as environment variables, and asserts the expected userinfo output.
 
+## Known scanner false positives
+
+| Tool | Vulnerability ID | File | Reason |
+|---|---|---|---|
+| HCL AppScan CodeSweep | `ErrorHandling.RevealDetails.StackTrace` | `tests/e2e/ropc-flow.spec.ts` lines 148, 151 | `TEST_PASSWORD` is passed to `sanitise()` as the redaction key, not logged directly. The value printed to console is the return value of `sanitise()` with the password already replaced by `[REDACTED]`. The scanner cannot distinguish between logging a secret and using it to redact output. |
+
 ## Troubleshooting
 - CLI displaying `npm ERR! code E401` when trying to run `npm install`. Delete the package-lock.json file and run `npm install` again.
 
