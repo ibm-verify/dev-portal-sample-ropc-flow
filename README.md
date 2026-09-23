@@ -14,6 +14,58 @@ This sample shows how to use the openid-client library with Node.js to:
 
 ![screenshot](screenshot.png)
 
+## CI Pipeline
+
+Every push to any branch automatically runs two sequential checks:
+
+| Job | What it does |
+|---|---|
+| **Smoke test** | Builds the Docker image, starts the container, and verifies the app reaches the username prompt without crashing |
+| **E2E test** | Runs only if the smoke test passes. Executes the full ROPC flow against the IBM Verify dev tenant — exchanges credentials for tokens, calls the userinfo endpoint, and verifies all expected user claims are returned |
+
+If the smoke test fails, the E2E job is skipped. If either job fails, the workflow is marked as failed on the branch.
+
+### GitHub Actions secrets
+
+Add the following secrets to **Settings → Secrets and variables → Actions**:
+
+| Secret | Description |
+|---|---|
+| `TENANT_URL` | `https://<your-tenant>.verify.ibm.com` |
+| `CLIENT_ID` | ROPC application Client ID |
+| `CLIENT_SECRET` | ROPC application Client Secret |
+| `SCOPE` | e.g. `openid` |
+| `TEST_USERNAME` | IBM Verify test user username |
+| `TEST_PASSWORD` | IBM Verify test user password |
+
+### Running E2E tests locally
+
+1. Add the following to your `.env` file (in addition to the existing variables):
+```
+TEST_USERNAME=<ibm-verify-test-username>
+TEST_PASSWORD=<ibm-verify-test-password>
+```
+
+2. Build the Docker image:
+```bash
+docker build -t ropc-sample:e2e .
+```
+
+3. Run the automated E2E test (starts the container, feeds credentials, asserts output):
+```bash
+DOCKER_IMAGE=ropc-sample:e2e npm test
+```
+
+4. On failure, sanitised stdout/stderr is printed to the console — no tokens or passwords are logged.
+
+> **Note:** Unlike browser-based flows, ROPC does not require Playwright. The test spawns the Docker container directly, injects credentials as environment variables, and asserts the expected userinfo output.
+
+## Known scanner false positives
+
+| Tool | Vulnerability ID | File | Reason |
+|---|---|---|---|
+| HCL AppScan CodeSweep | `ErrorHandling.RevealDetails.StackTrace` | `tests/e2e/ropc-flow.spec.ts` lines 148, 151 | `TEST_PASSWORD` is passed to `sanitise()` as the redaction key, not logged directly. The value printed to console is the return value of `sanitise()` with the password already replaced by `[REDACTED]`. The scanner cannot distinguish between logging a secret and using it to redact output. |
+
 ## Troubleshooting
 - CLI displaying `npm ERR! code E401` when trying to run `npm install`. Delete the package-lock.json file and run `npm install` again.
 

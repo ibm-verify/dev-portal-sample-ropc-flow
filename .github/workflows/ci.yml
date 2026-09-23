@@ -1,0 +1,145 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: CI
+
+on:
+  push:
+
+env:
+  IMAGE_NAME: ropc-sample
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # SMOKE: install dependencies, build Docker image, verify container starts
+  # ---------------------------------------------------------------------------
+  smoke:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Docker image
+        run: docker build -t ${{ env.IMAGE_NAME }}:smoke .
+
+      # Verify the container starts and the app reaches the Authenticating step.
+      # Only TEST_USERNAME and TEST_PASSWORD are needed to bypass readline-sync.
+      # CLIENT_ID and CLIENT_SECRET are intentionally omitted — the token request
+      # never executes because the .invalid TLD (IANA-reserved, RFC 2606) cannot
+      # resolve in DNS. Placeholder values are used so real credentials are never
+      # present in the smoke job at all.
+      - name: Verify container starts
+        env:
+          TENANT_URL: https://smoke-check.example.invalid
+          CLIENT_ID: smoke-client-id
+          CLIENT_SECRET: smoke-client-secret
+          SCOPE: openid
+          TEST_USERNAME: smoke-user
+          TEST_PASSWORD: smoke-pass
+        run: |
+          # Bare -e KEY inherits values from the step env block above,
+          # keeping placeholder values out of the process args list.
+          docker run -d --name ropc-smoke \
+            -e TENANT_URL \
+            -e CLIENT_ID \
+            -e CLIENT_SECRET \
+            -e SCOPE \
+            -e TEST_USERNAME \
+            -e TEST_PASSWORD \
+            ${{ env.IMAGE_NAME }}:smoke
+
+          # Bounded poll: up to 20 attempts x 1 s = 20 s max
+          # Success = app printed banner + Authenticating (credentials consumed)
+          # Container will then exit due to the invalid tenant URL - that is expected
+          FOUND=0
+          for i in $(seq 1 20); do
+            LOGS=$(docker logs ropc-smoke 2>&1 || true)
+            if echo "$LOGS" | grep -qi "Authenticating"; then
+              echo "✓ Container reached Authenticating step (attempt $i)"
+              FOUND=1
+              break
+            fi
+            STATUS=$(docker inspect -f '{{.State.Status}}' ropc-smoke 2>/dev/null || echo "gone")
+            if [ "$STATUS" = "exited" ] || [ "$STATUS" = "gone" ]; then
+              if echo "$LOGS" | grep -qi "Resource Owner"; then
+                echo "✓ Container started and printed banner (exited due to invalid tenant URL)"
+                FOUND=1
+              else
+                echo "✗ Container exited without printing expected output" >&2
+                docker logs ropc-smoke 2>&1 || true
+                exit 1
+              fi
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$FOUND" = "0" ]; then
+            echo "✗ Expected output not seen after 20 s" >&2
+            docker logs ropc-smoke 2>&1 || true
+            exit 1
+          fi
+
+      - name: Dump smoke container logs on failure
+        if: failure()
+        run: docker logs ropc-smoke 2>&1 || true
+
+      - name: Cleanup smoke container
+        if: always()
+        run: docker rm -f ropc-smoke || true
+
+  # ---------------------------------------------------------------------------
+  # E2E: run the full ROPC flow against IBM Verify using real credentials
+  # ---------------------------------------------------------------------------
+  e2e:
+    name: E2E Test — ROPC Flow
+    runs-on: ubuntu-latest
+    needs: smoke
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install all dependencies (including devDependencies)
+        run: npm ci
+
+      - name: Build Docker image
+        run: docker build -t ${{ env.IMAGE_NAME }}:e2e .
+
+      - name: Run ROPC E2E test
+        env:
+          DOCKER_IMAGE: ${{ env.IMAGE_NAME }}:e2e
+          TENANT_URL: ${{ secrets.TENANT_URL }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          SCOPE: ${{ secrets.SCOPE }}
+          TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+        run: npm test
+
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-logs
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore

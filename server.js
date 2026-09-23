@@ -36,8 +36,10 @@ const config = {
   scope: process.env.SCOPE,
 };
 console.log(`\n`);
-const username = rls.question("Username: ");
-const password = rls.question("Password: ", { hideEchoBack: true });
+// When TEST_USERNAME / TEST_PASSWORD are set (CI / automated testing),
+// skip the interactive prompts so readline-sync does not try to open /dev/tty.
+const username = process.env.TEST_USERNAME || rls.question("Username: ");
+const password = process.env.TEST_PASSWORD || rls.question("Password: ", { hideEchoBack: true });
 console.log(`\nAuthenticating...\n`);
 
 let tenantURL = process.env.TENANT_URL;
