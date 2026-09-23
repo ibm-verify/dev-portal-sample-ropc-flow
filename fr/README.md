@@ -1,14 +1,14 @@
 # Exemple d'application du portail de développement pour le type de subvention ROPC (Resource Owner Password Credentials).
 
 Cet exemple montre comment utiliser la bibliothèque openid-client avec Node.js pour :
-- Authentifier un utilisateur enregistré via IBM Security Verify
+- Authentifier un utilisateur enregistré via IBM Verify
 - Effectuer avec succès une requête API vers le point de terminaison `userinfo` pour renvoyer les détails de l'utilisateur authentifié.
 
 ## Exécution de l'exemple d'application :
 1. Créez un fichier `.env` à l'aide de l'extrait généré par le portail Developer. Vous pouvez vous référer au fichier `.env.example` pour connaître les variables d'environnement nécessaires à l'exécution de cet exemple d'application.
 2. Dans l'interface de gestion, entrez `npm install`
 3. Après avoir installé node_modules avec succès, démarrez l'application d'exemple à partir de l'interface de gestion en exécutant la commande suivante `npm run start`
-4. Lorsque vous y êtes invité, entrez un nom d'utilisateur et un mot de passe valides qui existent dans votre locataire IBM Security Verify.
+4. Lorsque vous y êtes invité, entrez un nom d'utilisateur et un mot de passe valides qui existent dans votre locataire IBM Verify.
 5. Si l'authentification est réussie, vous verrez des informations sur l'utilisateur authentifié. Ces informations sont récupérées en appelant le point de terminaison UserInfo l'OIDC.
 
 
