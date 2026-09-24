@@ -22,7 +22,7 @@ Cet exemple montre comment utiliser la bibliothèque openid-client avec Node.js 
 
 La licence MIT (MIT)
 
-Copyright (c) 2023 - IBM Corp.
+Copyright contributors to the IBM Verify Developer Portal Sample App for Resource Owner Password Credentials (ROPC) Grant Type project
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the
