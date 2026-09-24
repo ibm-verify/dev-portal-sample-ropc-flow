@@ -1,6 +1,6 @@
 MIT LICENSE
 
-Copyright contributeurs au projet IBM Security Verify Developer Portal Sample App for Resource Owner Password Credentials (ROPC) Grant Type
+Copyright contributeurs au projet IBM Verify Developer Portal Sample App for Resource Owner Password Credentials (ROPC) Grant Type
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the
